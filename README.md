@@ -1,4 +1,4 @@
-# Obsidian Heatmap · cérebro em brasa
+# Obsidian Heatmap · Ember Brain
 
 Mostra **quais notas do seu vault Obsidian estão recebendo mais atualizações**: grava um mapa de calor nas próprias notas (para colorir o grafo nativo) e gera uma página animada do vault, feita para mostrar para outras pessoas.
 
@@ -7,7 +7,7 @@ Mostra **quais notas do seu vault Obsidian estão recebendo mais atualizações*
 São duas partes:
 
 1. **`heatmap.py`** grava `heat: hot | warm | cold` no frontmatter de cada nota e exporta o grafo para a página.
-2. **`show/index.html`** desenha o vault como uma constelação animada:
+2. **`show/index.html`** (Ember Brain) desenha o vault como uma constelação animada:
    - **Abertura:** as notas nascem na ordem em que foram criadas, com uma data correndo no canto.
    - **Notas em brasa:** pulsam em amarelo, com ondas de sonar.
    - **Partículas:** correm pelas conexões em direção às notas mais quentes.
