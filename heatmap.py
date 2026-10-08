@@ -26,7 +26,8 @@ Uso:
                    subpasta (usado nos links obsidian:// da página)
 
 Sem argumentos, lê config.local.json ao lado do script:
-  {"vault": "...", "obsidian_root": "...", "notion_folder": "Notion"}
+  {"vault": "...", "obsidian_root": "...", "notion_folder": "Notion",
+   "group_colors": {"Pasta": "#rrggbb"}}
 Com "notion_folder", roda antes o notion_mirror.py (espelho do Notion no vault).
 """
 import argparse
@@ -201,6 +202,7 @@ if not DRY:
             "updated": int(now * 1000),
             "vault": os.path.basename(ROOT),
             "prefix": "" if prefix == "." else prefix + "/",
+            "colors": config.get("group_colors", {}),
             "nodes": nodes,
             "links": links,
         }, fh, ensure_ascii=False)

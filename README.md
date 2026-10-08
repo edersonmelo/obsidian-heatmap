@@ -34,6 +34,8 @@ open show/index.html
 |---|---|
 | `vault` | Pasta com as notas a analisar. Pode ser o vault inteiro ou uma subpasta dele. |
 | `obsidian_root` | Raiz do vault aberto no Obsidian. Só é diferente de `vault` quando você analisa uma subpasta, e serve para montar os links `obsidian://`. |
+| `notion_folder` | (opcional) pasta do espelho do Notion; ativa o `notion_mirror.py` antes do cálculo. |
+| `group_colors` | (opcional) cor fixa por pasta de primeiro nível no Ember Brain, ex.: `{"Notion": "#dfe6f5"}`. As outras pastas recebem cores da paleta pela ordem de tamanho. |
 
 Também dá para passar tudo por argumento: `heatmap.py --vault PASTA [--obsidian-root PASTA] [--dry-run]`.
 

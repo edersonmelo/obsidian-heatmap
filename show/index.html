@@ -52,12 +52,15 @@ const HOT = "#ffd400";
 const PALETTE = ["#4dd0e1", "#ff5c7a", "#69f0ae", "#b388ff", "#ff9e40", "#64b5f6", "#f06292", "#aed581", "#ffb74d"];
 const ROOT_COLOR = "#8fa3bf";
 let GROUPS = {}, DATA;
-function buildGroups(nodes) {
+function buildGroups(nodes, fixed = {}) {
   const count = {};
   nodes.forEach(n => (count[n.g] = (count[n.g] || 0) + 1));
-  GROUPS = { "": { label: "Raiz", color: ROOT_COLOR } };
+  GROUPS = { "": { label: "Raiz", color: fixed[""] || ROOT_COLOR } };
+  // Cores fixas do config (group_colors) primeiro; o resto pega a paleta, sem repetir as fixas.
+  const free = PALETTE.filter(c => !Object.values(fixed).map(x => x.toLowerCase()).includes(c));
+  let i = 0;
   Object.keys(count).filter(g => g).sort((a, b) => count[b] - count[a])
-    .forEach((g, i) => (GROUPS[g] = { label: g.replace(/^\d+\s+/, ""), color: PALETTE[i % PALETTE.length] }));
+    .forEach(g => (GROUPS[g] = { label: g.replace(/^\d+\s+/, ""), color: fixed[g] || free[i++ % free.length] }));
 }
 const groupOf = g => GROUPS[g] || GROUPS[""];
 // Nomes de notas e pastas vêm do vault: sempre escapar antes de pôr em HTML.
@@ -100,7 +103,7 @@ let nodes = [], links = [], byPath = new Map(), sim;
 function load(data) {
   DATA = data;
   document.getElementById("vname").textContent = data.prefix.replace(/\/$/, "").split("/").pop() || data.vault;
-  buildGroups(data.nodes);
+  buildGroups(data.nodes, data.colors);
   const prev = byPath;
   byPath = new Map();
   nodes = data.nodes.map(d => {
