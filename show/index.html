@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cérebro em Brasa</title>
+<style>
+  :root {
+    --bg: #04060d;
+    --ink: #e8ecf6;
+    --dim: #7d8aa8;
+    --gold: #ffd400;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+  body { font: 14px/1.4 -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; color: var(--ink); }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  .hud { position: fixed; pointer-events: none; }
+  #title { top: 24px; left: 28px; }
+  #title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: .04em; }
+  #title h1 span { color: var(--gold); text-shadow: 0 0 18px rgba(255, 212, 0, .7); }
+  #title p { margin: 6px 0 0; color: var(--dim); font-size: 13px; }
+  #clock { bottom: 28px; left: 28px; font: 600 42px/1 "SF Mono", Menlo, monospace; color: rgba(232, 236, 246, .9);
+           letter-spacing: .06em; text-shadow: 0 0 24px rgba(120, 170, 255, .5); transition: opacity 1.2s; }
+  #legend { bottom: 28px; right: 28px; text-align: right; color: var(--dim); font-size: 12px; }
+  #legend div { margin-top: 5px; }
+  #legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-left: 8px; vertical-align: middle; }
+  #hint { top: 24px; right: 28px; color: var(--dim); font-size: 12px; text-align: right; }
+  #tip { padding: 8px 12px; border-radius: 8px; background: rgba(10, 14, 28, .85); border: 1px solid rgba(255, 255, 255, .08);
+         font-size: 13px; opacity: 0; transition: opacity .15s; backdrop-filter: blur(6px); }
+  #tip small { display: block; color: var(--dim); }
+  @media (max-width: 640px) {
+    #title { left: 16px; top: 16px; } #hint { display: none; }
+    #clock { left: 16px; bottom: 16px; font-size: 28px; } #legend { right: 16px; bottom: 16px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="title" class="hud"><h1><b id="vname"></b> · <span>cérebro em brasa</span></h1><p id="stats"></p></div>
+<div id="hint" class="hud">arraste · role p/ zoom · clique abre no Obsidian<br>R repete a abertura · F tela cheia</div>
+<div id="clock" class="hud"></div>
+<div id="legend" class="hud"></div>
+<div id="tip" class="hud"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const DATA_FILE = params.has("demo") ? "demo-data.js" : "graph-data.js";
+const HOT = "#ffd400";
+// Cor por pasta de primeiro nível, atribuída pela ordem de tamanho do grupo.
+const PALETTE = ["#4dd0e1", "#ff5c7a", "#69f0ae", "#b388ff", "#ff9e40", "#64b5f6", "#f06292", "#aed581", "#ffb74d"];
+const ROOT_COLOR = "#8fa3bf";
+let GROUPS = {}, DATA;
+function buildGroups(nodes) {
+  const count = {};
+  nodes.forEach(n => (count[n.g] = (count[n.g] || 0) + 1));
+  GROUPS = { "": { label: "Raiz", color: ROOT_COLOR } };
+  Object.keys(count).filter(g => g).sort((a, b) => count[b] - count[a])
+    .forEach((g, i) => (GROUPS[g] = { label: g.replace(/^\d+\s+/, ""), color: PALETTE[i % PALETTE.length] }));
+}
+const groupOf = g => GROUPS[g] || GROUPS[""];
+
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const tip = document.getElementById("tip");
+const clock = document.getElementById("clock");
+let W, H, DPR;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+}
+addEventListener("resize", resize); resize();
+
+// Sprites de brilho pré-renderizados por cor (desenhar gradiente a cada quadro é caro).
+const glowCache = {};
+function glow(color) {
+  if (glowCache[color]) return glowCache[color];
+  const s = 128, c = document.createElement("canvas");
+  c.width = c.height = s;
+  const g = c.getContext("2d"), grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  grd.addColorStop(0, color); grd.addColorStop(0.18, color + "cc");
+  grd.addColorStop(0.45, color + "33"); grd.addColorStop(1, color + "00");
+  g.fillStyle = grd; g.fillRect(0, 0, s, s);
+  return (glowCache[color] = c);
+}
+
+// Estrelas de fundo.
+const stars = Array.from({ length: 260 }, () => ({
+  x: Math.random(), y: Math.random(), r: Math.random() * 1.2 + .2, p: Math.random() * 6.28, s: Math.random() * .8 + .2,
+}));
+
+// ---------- dados ----------
+let nodes = [], links = [], byPath = new Map(), sim;
+
+function load(data) {
+  DATA = data;
+  document.getElementById("vname").textContent = data.prefix.replace(/\/$/, "").split("/").pop() || data.vault;
+  buildGroups(data.nodes);
+  const prev = byPath;
+  byPath = new Map();
+  nodes = data.nodes.map(d => {
+    const old = prev.get(d.p);
+    const n = Object.assign(old || { x: (Math.random() - .5) * 40, y: (Math.random() - .5) * 40, deg: 0, born: 0 }, d);
+    n.deg = 0;
+    byPath.set(n.p, n);
+    return n;
+  });
+  links = data.links.map(([a, b]) => ({ source: nodes[a], target: nodes[b] }));
+  links.forEach(l => { l.source.deg++; l.target.deg++; });
+  nodes.forEach(n => {
+    n.r = 2.2 + Math.sqrt(n.deg) * 1.6 + (n.h === "hot" ? 3 : 0);
+    n.color = n.h === "hot" ? HOT : groupOf(n.g).color;
+    n.phase = n.phase ?? Math.random() * 6.28;
+  });
+  // Quem recebe partículas: arestas ligadas a notas quentes/mornas, fluindo para a mais quente.
+  links.forEach(l => {
+    const sa = l.source.s, sb = l.target.s;
+    l.to = sa >= sb ? l.source : l.target;
+    l.from = l.to === l.source ? l.target : l.source;
+    l.flow = Math.max(sa, sb);
+  });
+  const hot = nodes.filter(n => n.h === "hot").length, warm = nodes.filter(n => n.h === "warm").length;
+  document.getElementById("stats").textContent =
+    `${nodes.length} notas · ${links.length} conexões · ${hot} em brasa · ${warm} aquecendo · atualizado ${new Date(data.updated).toLocaleString("pt-BR")}`;
+  const used = [...new Set(nodes.map(n => GROUPS[n.g] ? n.g : ""))];
+  document.getElementById("legend").innerHTML =
+    `<div>em brasa<i style="background:${HOT};box-shadow:0 0 10px ${HOT}"></i></div>` +
+    used.map(g => `<div>${groupOf(g).label}<i style="background:${groupOf(g).color}"></i></div>`).join("");
+
+  if (sim) sim.stop();
+  sim = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).distance(l => 26 + Math.min(l.source.deg, l.target.deg) * 1.5).strength(.6))
+    .force("charge", d3.forceManyBody().strength(n => -28 - n.deg * 5))
+    .force("collide", d3.forceCollide(n => n.r + 2))
+    .force("x", d3.forceX().strength(.035))
+    .force("y", d3.forceY().strength(.035))
+    .alphaDecay(.012)
+    .alphaTarget(.004); // nunca para de todo: o cérebro "respira"
+}
+
+// ---------- abertura: notas nascem na ordem de criação ----------
+const INTRO_MS = 14000;
+let introStart = 0, introOn = false, order = [];
+function startIntro() {
+  order = [...nodes].sort((a, b) => a.b - b.b);
+  nodes.forEach(n => (n.born = Infinity));
+  introStart = performance.now(); introOn = true; autoCam = true;
+  clock.style.opacity = 1;
+  sim.alpha(1);
+}
+function updateIntro(now) {
+  if (!introOn) return;
+  const t = Math.min(1, (now - introStart) / INTRO_MS);
+  const eased = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  const k = Math.floor(eased * order.length);
+  for (let i = 0; i < k; i++) if (order[i].born === Infinity) order[i].born = now;
+  const cur = order[Math.max(0, k - 1)];
+  if (cur) clock.textContent = new Date(cur.b).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+  if (t >= 1) { introOn = false; setTimeout(() => (clock.style.opacity = 0), 2500); }
+}
+const visible = (n, now) => n.born <= now;
+
+// ---------- partículas ----------
+const particles = [];
+function spawnParticles(now) {
+  for (const l of links) {
+    if (!visible(l.source, now) || !visible(l.target, now)) continue;
+    const rate = l.to.h === "hot" ? .05 : l.to.h === "warm" ? .006 : .0007;
+    if (Math.random() < rate && particles.length < 900)
+      particles.push({ l, t: 0, v: .006 + Math.random() * .01, c: l.to.h === "hot" ? HOT : l.from.color });
+  }
+}
+
+// ---------- câmera ----------
+let tf = d3.zoomIdentity;
+// Câmera automática: enquadra as notas visíveis e acompanha o cérebro crescer,
+// até a pessoa arrastar ou dar zoom (R religa).
+let autoCam = true;
+const zoom = d3.zoom().scaleExtent([.05, 8]).on("zoom", e => {
+  tf = e.transform;
+  if (e.sourceEvent) autoCam = false;
+});
+d3.select(canvas).call(zoom);
+function camTarget(now) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of nodes) {
+    if (!visible(n, now)) continue;
+    x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y);
+  }
+  if (x0 === Infinity) return null;
+  const pad = 140, k = Math.min(4, (W - pad) / Math.max(x1 - x0, 60), (H - pad) / Math.max(y1 - y0, 60));
+  return { k, x: W / 2 - k * (x0 + x1) / 2, y: H / 2 - k * (y0 + y1) / 2 };
+}
+function updateCam(now, snap) {
+  if (!autoCam) return;
+  const t = camTarget(now);
+  if (!t) return;
+  const a = snap ? 1 : .04;
+  const k = tf.k + (t.k - tf.k) * a, x = tf.x + (t.x - tf.x) * a, y = tf.y + (t.y - tf.y) * a;
+  d3.select(canvas).call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(k));
+}
+
+// ---------- quadro ----------
+function frame(now) {
+  updateIntro(now);
+  updateCam(now);
+  spawnParticles(now);
+  const time = now / 1000;
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.globalCompositeOperation = "source-over";
+  const bg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * .7);
+  bg.addColorStop(0, "#0b1226"); bg.addColorStop(1, "#04060d");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  for (const s of stars) {
+    ctx.globalAlpha = .25 + .35 * Math.sin(time * s.s + s.p) ** 2;
+    ctx.fillStyle = "#cfd8ff";
+    ctx.fillRect(s.x * W, s.y * H, s.r, s.r);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.setTransform(DPR * tf.k, 0, 0, DPR * tf.k, DPR * tf.x, DPR * tf.y);
+  ctx.globalCompositeOperation = "lighter";
+
+  // conexões
+  ctx.lineWidth = .6 / Math.sqrt(tf.k);
+  for (const l of links) {
+    if (!visible(l.source, now) || !visible(l.target, now)) continue;
+    const hot = l.to.h === "hot";
+    ctx.strokeStyle = hot ? "rgba(255,212,0,.22)" : l.to.h === "warm" ? "rgba(140,170,255,.13)" : "rgba(140,170,255,.06)";
+    ctx.beginPath(); ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); ctx.stroke();
+  }
+
+  // partículas
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.t += p.v;
+    if (p.t >= 1) { particles.splice(i, 1); continue; }
+    const a = p.l.from, b = p.l.to;
+    const x = a.x + (b.x - a.x) * p.t, y = a.y + (b.y - a.y) * p.t;
+    const r = 5 * Math.sin(Math.PI * p.t) + 1;
+    ctx.globalAlpha = .9;
+    ctx.drawImage(glow(p.c), x - r, y - r, r * 2, r * 2);
+  }
+
+  // nós
+  for (const n of nodes) {
+    if (!visible(n, now)) continue;
+    const age = (now - n.born) / 1000;
+    const birth = age < 1.2 ? 1 + 2.5 * (1 - age / 1.2) : 1; // clarão ao nascer
+    let pulse, alpha;
+    if (n.h === "hot") { pulse = 1 + .35 * Math.sin(time * 3 + n.phase); alpha = 1; }
+    else if (n.h === "warm") { pulse = 1 + .15 * Math.sin(time * 1.6 + n.phase); alpha = .85; }
+    else { pulse = 1; alpha = .35 + .2 * Math.sin(time * .7 + n.phase) ** 2; }
+    const gr = n.r * (n.h === "hot" ? 7 : n.h === "warm" ? 3.4 : 3) * pulse * birth;
+    ctx.globalAlpha = alpha * (n.h === "hot" ? .8 : n.h === "warm" ? .32 : .4);
+    ctx.drawImage(glow(n.color), n.x - gr, n.y - gr, gr * 2, gr * 2);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = n.h === "hot" ? "#fffbe6" : n.color;
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.r * (n.h === "hot" ? pulse : 1) * .7, 0, 6.283); ctx.fill();
+
+    if (n.h === "hot") { // ondas de sonar
+      for (let k = 0; k < 3; k++) {
+        const ph = ((time * .45 + k / 3 + n.phase) % 1);
+        ctx.globalAlpha = (1 - ph) * .55;
+        ctx.strokeStyle = HOT; ctx.lineWidth = 1.4 / tf.k;
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r + ph * 70, 0, 6.283); ctx.stroke();
+      }
+    }
+  }
+
+  // rótulos: hubs e notas quentes sempre; o resto aparece com zoom
+  ctx.globalCompositeOperation = "source-over";
+  ctx.textAlign = "center";
+  for (const n of nodes) {
+    if (!visible(n, now)) continue;
+    const show = n.h === "hot" || n.deg >= 8 || tf.k > 2.2 || n === hover;
+    if (!show) continue;
+    const size = (n.h === "hot" ? 14 : 11) / Math.max(tf.k, .8);
+    ctx.font = `${n.h === "hot" ? 600 : 400} ${size}px -apple-system, sans-serif`;
+    ctx.globalAlpha = n.h === "hot" || n === hover ? 1 : .7;
+    ctx.fillStyle = n.h === "hot" ? "#fff3b0" : "#c9d3ea";
+    const ty = n.y + n.r + size + 3;
+    ctx.lineWidth = size / 3.5; ctx.strokeStyle = "rgba(4,6,13,.85)"; ctx.lineJoin = "round";
+    ctx.strokeText(n.n, n.x, ty);
+    ctx.shadowColor = n.h === "hot" ? HOT : "transparent"; ctx.shadowBlur = n.h === "hot" ? 12 : 0;
+    ctx.fillText(n.n, n.x, ty);
+  }
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+
+  requestAnimationFrame(frame);
+}
+
+// ---------- interação ----------
+let hover = null;
+function pick(ev) {
+  const [x, y] = tf.invert([ev.clientX, ev.clientY]);
+  let best = null, bd = 14 / tf.k;
+  for (const n of nodes) { const d = Math.hypot(n.x - x, n.y - y); if (d < bd + n.r) { bd = d; best = n; } }
+  return best;
+}
+canvas.addEventListener("mousemove", ev => {
+  hover = pick(ev);
+  if (hover) {
+    tip.innerHTML = `${hover.n}<small>${hover.p.replace(/\.md$/, "")} · ${hover.deg} conexões · ${({ hot: "em brasa", warm: "aquecendo", cold: "fria" })[hover.h]}</small>`;
+    tip.style.left = ev.clientX + 14 + "px"; tip.style.top = ev.clientY + 14 + "px"; tip.style.opacity = 1;
+    canvas.style.cursor = "pointer";
+  } else { tip.style.opacity = 0; canvas.style.cursor = ""; }
+});
+canvas.addEventListener("click", ev => {
+  const n = pick(ev);
+  if (n && !params.has("demo"))
+    location.href = `obsidian://open?vault=${encodeURIComponent(DATA.vault)}&file=${encodeURIComponent(DATA.prefix + n.p.replace(/\.md$/, ""))}`;
+});
+addEventListener("keydown", e => {
+  if (e.key === "r" || e.key === "R") startIntro();
+  if (e.key === "f" || e.key === "F") document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+});
+
+// Recarrega os dados (o agendamento regrava graph-data.js de hora em hora) sem perder as posições.
+// Carrega os dados por <script> (funciona abrindo o arquivo direto, sem servidor).
+function fetchData(cb, onError) {
+  const s = document.createElement("script");
+  s.src = DATA_FILE + "?t=" + Date.now();
+  s.onload = () => { s.remove(); cb(window.VAULT_GRAPH); };
+  s.onerror = () => { s.remove(); onError && onError(); };
+  document.body.appendChild(s);
+}
+
+fetchData(data => {
+  load(data);
+  // ?skip pula a abertura e já mostra o cérebro pronto.
+  if (params.has("skip")) { clock.style.opacity = 0; for (let i = 0; i < 300; i++) sim.tick(); updateCam(performance.now(), true); }
+  else startIntro();
+  requestAnimationFrame(frame);
+  // O agendamento regrava graph-data.js; recarrega sem perder as posições.
+  setInterval(() => fetchData(load), 10 * 60 * 1000);
+}, () => {
+  document.getElementById("stats").textContent =
+    `Não achei ${DATA_FILE}. Rode heatmap.py para gerar os dados, ou abra index.html?demo.`;
+});
+</script>
+</body>
+</html>

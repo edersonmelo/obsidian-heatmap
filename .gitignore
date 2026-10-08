@@ -1,0 +1,7 @@
+# Dados pessoais do vault: nunca versionar
+config.local.json
+heat-state.json
+heatmap.log
+show/graph-data.js
+__pycache__/
+.DS_Store
