@@ -66,6 +66,8 @@ Para mexer no tamanho dos nós do grafo nativo, o plugin da comunidade [Extended
 
 ## A página animada
 
+> Quer a mesma animação **dentro do Obsidian**, numa aba ao lado do Graph view? Use o plugin [Ember Brain](https://github.com/edersonmelo/obsidian-ember-brain). Ele lê o `heat:` gravado por este script e atualiza ao vivo.
+
 | Ação | Efeito |
 |---|---|
 | arrastar / rolar | mover / zoom (desliga a câmera automática) |
