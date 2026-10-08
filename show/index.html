@@ -43,7 +43,7 @@
 <div id="legend" class="hud"></div>
 <div id="tip" class="hud"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" integrity="sha512-vc58qvvBdrDR4etbxMdlTt4GBQk1qjvyORR2nrsPsFPyrs+/u5c3+1Ct6upOgdZoIl7eq6k3a1UPDSNAQi/32A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 const params = new URLSearchParams(location.search);
 const DATA_FILE = params.has("demo") ? "demo-data.js" : "graph-data.js";
@@ -60,6 +60,8 @@ function buildGroups(nodes) {
     .forEach((g, i) => (GROUPS[g] = { label: g.replace(/^\d+\s+/, ""), color: PALETTE[i % PALETTE.length] }));
 }
 const groupOf = g => GROUPS[g] || GROUPS[""];
+// Nomes de notas e pastas vêm do vault: sempre escapar antes de pôr em HTML.
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
@@ -128,7 +130,7 @@ function load(data) {
   const used = [...new Set(nodes.map(n => GROUPS[n.g] ? n.g : ""))];
   document.getElementById("legend").innerHTML =
     `<div>em brasa<i style="background:${HOT};box-shadow:0 0 10px ${HOT}"></i></div>` +
-    used.map(g => `<div>${groupOf(g).label}<i style="background:${groupOf(g).color}"></i></div>`).join("");
+    used.map(g => `<div>${esc(groupOf(g).label)}<i style="background:${groupOf(g).color}"></i></div>`).join("");
 
   if (sim) sim.stop();
   sim = d3.forceSimulation(nodes)
@@ -305,7 +307,7 @@ function pick(ev) {
 canvas.addEventListener("mousemove", ev => {
   hover = pick(ev);
   if (hover) {
-    tip.innerHTML = `${hover.n}<small>${hover.p.replace(/\.md$/, "")} · ${hover.deg} conexões · ${({ hot: "em brasa", warm: "aquecendo", cold: "fria" })[hover.h]}</small>`;
+    tip.innerHTML = `${esc(hover.n)}<small>${esc(hover.p.replace(/\.md$/, ""))} · ${hover.deg} conexões · ${({ hot: "em brasa", warm: "aquecendo", cold: "fria" })[hover.h]}</small>`;
     tip.style.left = ev.clientX + 14 + "px"; tip.style.top = ev.clientY + 14 + "px"; tip.style.opacity = 1;
     canvas.style.cursor = "pointer";
   } else { tip.style.opacity = 0; canvas.style.cursor = ""; }
