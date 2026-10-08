@@ -76,6 +76,28 @@ Para mexer no tamanho dos nós do grafo nativo, o plugin da comunidade [Extended
 
 Com a página aberta, ela recarrega `graph-data.js` a cada 10 minutos sem perder as posições. Combinada com o agendamento abaixo, fica "ao vivo".
 
+## Notion dentro do grafo (opcional)
+
+`notion_mirror.py` espelha a **estrutura** do seu Notion dentro do vault:
+- **Uma nota por página:** cada página ou banco de dados vira uma nota leve em `<vault>/Notion/`, com título, link "Abrir no Notion", `**Dentro de:** [[página-mãe]]` e uma seção `## Links`.
+- **Links que vira `[[links]]`:** subpáginas, menções, blocos *link to page*, links `notion.so` no texto e relações de banco de dados.
+- **Sem texto:** o conteúdo das páginas não é copiado.
+- **Calor:** a data de modificação da nota é a da última edição no Notion. Por isso o Notion entra no mapa de calor, no grafo do Obsidian e no Ember Brain como mais uma constelação.
+- **Leve:** só relê os blocos das páginas que mudaram desde a última execução.
+- **Mudanças no Notion:** renomeia notas quando a página é renomeada e remove as de páginas apagadas. Só remove arquivos com o `notion_id` correspondente.
+
+Configuração:
+
+1. Crie uma integração **interna** em [notion.so/profile/integrations](https://www.notion.so/profile/integrations) só com a permissão *Read content*.
+2. No Notion, em cada página de topo que quer espelhar, abra `•••` → *Connections* e adicione a integração. As subpáginas herdam o acesso.
+3. Guarde o token no Keychain. O comando pede o valor sem mostrar na tela:
+   ```sh
+   security add-generic-password -a "$USER" -s notion-ember-brain -w
+   ```
+   Alternativa: variável de ambiente `NOTION_TOKEN`.
+4. Teste: `python3 notion_mirror.py --dry-run`
+5. Acrescente `"notion_folder": "Notion"` ao `config.local.json`. Daí em diante, o `heatmap.py` (e o agendamento) roda o espelho antes de calcular o calor.
+
 ## Rodar sozinho (macOS)
 
 ```sh
@@ -95,8 +117,9 @@ Se o vault estiver em `~/Documents`, o macOS pode pedir permissão de acesso à 
 | `show/demo-data.js` | sim | dados fictícios para `?demo` |
 | `scripts/make_demo.py` | sim | gera `demo-data.js` |
 | `scripts/install-launchd.sh` | sim | instala o agendamento no macOS |
+| `notion_mirror.py` | sim | espelha a estrutura do Notion no vault |
 | `config.local.json` | **não** | seus caminhos |
-| `heat-state.json`, `heatmap.log` | **não** | histórico e log |
+| `heat-state.json`, `notion-state.json`, `heatmap.log` | **não** | histórico, cache do Notion e log |
 | `show/graph-data.js` | **não** | o grafo do **seu** vault (nomes das notas) |
 
 ## Licença

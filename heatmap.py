@@ -26,7 +26,8 @@ Uso:
                    subpasta (usado nos links obsidian:// da página)
 
 Sem argumentos, lê config.local.json ao lado do script:
-  {"vault": "...", "obsidian_root": "..."}
+  {"vault": "...", "obsidian_root": "...", "notion_folder": "Notion"}
+Com "notion_folder", roda antes o notion_mirror.py (espelho do Notion no vault).
 """
 import argparse
 import collections
@@ -60,6 +61,14 @@ VAULT = os.path.abspath(os.path.expanduser(VAULT))
 ROOT = os.path.abspath(os.path.expanduser(args.obsidian_root or config.get("obsidian_root") or VAULT))
 DRY = args.dry_run
 now = time.time()
+
+# Espelho do Notion (notion_mirror.py) antes do cálculo, se configurado.
+# Falhas no Notion não impedem o mapa de calor.
+if config.get("notion_folder") and not args.vault and not DRY:
+    import subprocess
+    import sys
+    r = subprocess.run([sys.executable, os.path.join(HERE, "notion_mirror.py")], capture_output=True, text=True)
+    print((r.stdout or "").strip() or f"notion: falhou ({(r.stderr or '').strip().splitlines()[-1:]})")
 
 
 def vault_files():
