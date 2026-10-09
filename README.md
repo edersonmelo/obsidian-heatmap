@@ -4,6 +4,11 @@ Mostra **quais notas do seu vault Obsidian estão recebendo mais atualizações*
 
 ![Página animada com dados de demonstração](docs/screenshot.png)
 
+> **Quer só ver o vault animado dentro do Obsidian?** Instale o plugin [Ember Brain](https://community.obsidian.md/plugins/ember-brain). A partir da versão 0.2.0, ele calcula o calor sozinho, sem Python e sem agendamento. Este script continua útil para:
+> - **espelhar o Notion** no vault, para as páginas do Notion entrarem no grafo e no mapa de calor;
+> - gerar a **página animada fora do Obsidian**, para mostrar a outras pessoas;
+> - gravar o `heat:` sem o plugin instalado.
+
 São duas partes:
 
 1. **`heatmap.py`** grava `heat: hot | warm | cold` no frontmatter de cada nota e exporta o grafo para a página.
