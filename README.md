@@ -36,6 +36,7 @@ open show/index.html
 | `obsidian_root` | Raiz do vault aberto no Obsidian. Só é diferente de `vault` quando você analisa uma subpasta, e serve para montar os links `obsidian://`. |
 | `notion_folder` | (opcional) pasta do espelho do Notion; ativa o `notion_mirror.py` antes do cálculo. |
 | `group_colors` | (opcional) cor fixa por pasta de primeiro nível no Ember Brain, ex.: `{"Notion": "#dfe6f5"}`. As outras pastas recebem cores da paleta pela ordem de tamanho. |
+| `write_heat` | (opcional, padrão `true`) com `false`, o script não grava o `heat:` nas notas, mas continua calculando o calor e gerando a página. Use quando o plugin Ember Brain for o responsável pela gravação (veja abaixo). |
 
 Também dá para passar tudo por argumento: `heatmap.py --vault PASTA [--obsidian-root PASTA] [--dry-run]`.
 
@@ -66,7 +67,18 @@ Para mexer no tamanho dos nós do grafo nativo, o plugin da comunidade [Extended
 
 ## A página animada
 
-> Quer a mesma animação **dentro do Obsidian**, numa aba ao lado do Graph view? Use o plugin [Ember Brain](https://github.com/edersonmelo/obsidian-ember-brain). Ele lê o `heat:` gravado por este script e atualiza ao vivo.
+> Quer a mesma animação **dentro do Obsidian**, numa aba ao lado do Graph view? Use o plugin [Ember Brain](https://community.obsidian.md/plugins/ember-brain) ([código](https://github.com/edersonmelo/obsidian-ember-brain)). A partir da versão 0.2.0, ele calcula o calor sozinho, com o mesmo modelo deste script, e pode gravar o `heat:` nas notas.
+
+### Script ou plugin: quem grava o `heat:`
+
+Só um dos dois deve gravar. Cada um guarda o próprio histórico, e os dois contam as edições de um jeito um pouco diferente: o script compara a cada execução, o plugin vê cada salvamento. Gravando os dois ao mesmo tempo, uma nota pode ficar alternando de calor.
+
+| Você usa | Configure |
+|---|---|
+| Só o script (ou o Obsidian sem o plugin) | Nada: o padrão é gravar. |
+| O plugin, sem o espelho do Notion | Ligue *Write the heat property* no plugin e remova o agendamento do script. |
+| O plugin **e** o espelho do Notion | Ligue *Write the heat property* no plugin e coloque `"write_heat": false` no `config.local.json`. O script fica só com o espelho do Notion e a página. |
+| O plugin, deixando o script gravar | Mantenha o script como está e, no plugin, deixe *Use the heat property* ligado e *Write the heat property* desligado. |
 
 | Ação | Efeito |
 |---|---|

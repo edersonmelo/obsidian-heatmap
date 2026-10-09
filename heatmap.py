@@ -27,8 +27,10 @@ Uso:
 
 Sem argumentos, lê config.local.json ao lado do script:
   {"vault": "...", "obsidian_root": "...", "notion_folder": "Notion",
-   "group_colors": {"Pasta": "#rrggbb"}}
+   "group_colors": {"Pasta": "#rrggbb"}, "write_heat": true}
 Com "notion_folder", roda antes o notion_mirror.py (espelho do Notion no vault).
+Com "write_heat": false, não grava o `heat` nas notas (por exemplo, quando o
+plugin Ember Brain grava); ainda calcula o calor e exporta a página.
 """
 import argparse
 import collections
@@ -61,6 +63,7 @@ if not VAULT:
 VAULT = os.path.abspath(os.path.expanduser(VAULT))
 ROOT = os.path.abspath(os.path.expanduser(args.obsidian_root or config.get("obsidian_root") or VAULT))
 DRY = args.dry_run
+WRITE = config.get("write_heat", True) is not False
 now = time.time()
 
 # Espelho do Notion (notion_mirror.py) antes do cálculo, se configurado.
@@ -164,6 +167,8 @@ for f in notes:
     counts[heat] += 1
     path = os.path.join(VAULT, f)
     text = open(path, errors="ignore").read()
+    if not WRITE:
+        continue
     new = set_heat(text, heat)
     if new == text:
         continue
@@ -209,4 +214,5 @@ if not DRY:
         fh.write(";\n")
 
 print(f"{time.strftime('%Y-%m-%d %H:%M')} hot={counts['hot']} warm={counts['warm']} "
-      f"cold={counts['cold']} notas alteradas={changed}{' (dry-run)' if DRY else ''}")
+      f"cold={counts['cold']} notas alteradas={changed}{' (dry-run)' if DRY else ''}"
+      f"{'' if WRITE else ' (write_heat desligado)'}")
